@@ -1,0 +1,13 @@
+__pycache__/
+.DS_Store
+
+# Generated daily outputs. GitHub Actions uploads these as artifacts.
+analyze_stocks_all.csv
+analyze_stocks_passing.csv
+sector_rotation.csv
+summary.txt
+early_trend_all.csv
+early_trend_passing.csv
+strict_sp500_all.csv
+strict_sp500_passing.csv
+reversal_results.csv

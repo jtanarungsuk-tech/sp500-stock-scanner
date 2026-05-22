@@ -1,0 +1,67 @@
+name: Daily S&P 500 Stock Scan
+
+on:
+  schedule:
+    # 05:30 Asia/Bangkok, Tuesday-Saturday. This is 22:30 UTC, Monday-Friday.
+    - cron: "30 22 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run stock screener
+        run: |
+          python scripts/sp500_early_trend.py \
+            --csv analyze_stocks_all.csv \
+            --passing-csv analyze_stocks_passing.csv
+
+      - name: Run sector rotation
+        run: |
+          python scripts/sector_rotation.py \
+            --stock-csv analyze_stocks_all.csv \
+            --csv sector_rotation.csv
+
+      - name: Generate summary
+        run: |
+          python scripts/generate_report.py \
+            --stock-csv analyze_stocks_all.csv \
+            --passing-csv analyze_stocks_passing.csv \
+            --sector-csv sector_rotation.csv \
+            --output summary.txt
+
+      - name: Send Telegram summary
+        if: ${{ secrets.TELEGRAM_BOT_TOKEN != '' && secrets.TELEGRAM_CHAT_ID != '' }}
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python scripts/generate_report.py \
+            --stock-csv analyze_stocks_all.csv \
+            --passing-csv analyze_stocks_passing.csv \
+            --sector-csv sector_rotation.csv \
+            --output summary.txt \
+            --telegram
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-scan-results
+          path: |
+            analyze_stocks_all.csv
+            analyze_stocks_passing.csv
+            sector_rotation.csv
+            summary.txt
