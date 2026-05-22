@@ -2,8 +2,8 @@ name: Daily S&P 500 Stock Scan
 
 on:
   schedule:
-    # 05:30 Asia/Bangkok, Tuesday-Saturday. This is 22:30 UTC, Monday-Friday.
-    - cron: "30 22 * * 1-5"
+    # 07:00 Asia/Bangkok, Tuesday-Saturday. This is 00:00 UTC, Tuesday-Saturday.
+    - cron: "0 0 * * 2-6"
   workflow_dispatch:
 
 jobs:
@@ -56,7 +56,7 @@ jobs:
             --output summary.txt \
             --top 30 \
             --telegram \
-            --telegram-csv analyze_stocks_passing.csv \
+            --telegram-csv analyze_stocks_all.csv \
             --telegram-csv sector_rotation.csv
 
       - name: Upload results

@@ -19,8 +19,8 @@ Workflow อยู่ที่ `.github/workflows/daily-stock-scan.yml`
 
 ตารางรันอัตโนมัติ:
 
-- ทุกวันอังคาร-เสาร์ เวลา `05:30` กรุงเทพฯ
-- เทียบเป็น UTC คือ จันทร์-ศุกร์ `22:30`
+- ทุกวันอังคาร-เสาร์ เวลา `07:00` กรุงเทพฯ
+- เทียบเป็น UTC คือ อังคาร-เสาร์ `00:00`
 - กดรันเองได้จาก GitHub tab `Actions` ด้วย `workflow_dispatch`
 
 ผลลัพธ์ถูกเก็บเป็น artifact:
@@ -29,6 +29,8 @@ Workflow อยู่ที่ `.github/workflows/daily-stock-scan.yml`
 - `analyze_stocks_passing.csv`
 - `sector_rotation.csv`
 - `summary.txt`
+
+Telegram จะส่งสรุปหุ้นเด่น 30 ตัว และแนบ CSV หุ้นทั้งหมดที่สแกนมาใน `analyze_stocks_all.csv` พร้อมไฟล์ `sector_rotation.csv`
 
 ## ตั้งค่า Telegram
 
