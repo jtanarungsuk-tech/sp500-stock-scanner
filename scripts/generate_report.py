@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import mimetypes
 import os
 import urllib.parse
 import urllib.request
+import uuid
 
 import pandas as pd
 
@@ -53,10 +55,10 @@ def build_report(stock_csv: str, passing_csv: str, sector_csv: str, top: int) ->
     else:
         for idx, row in passing.head(top).iterrows():
             lines.append(
-                f"{idx + 1}. {row['symbol']} {row['sector']} "
-                f"score {int(row['setup_score'])}, "
-                f"RS10 {fmt_pct(row['ret_10d_pct'])}, "
-                f"vol {float(row['volume_ratio']):.2f}x, "
+                f"{idx + 1}. {row['symbol']} | {row['sector']} | "
+                f"score {int(row['setup_score'])} | "
+                f"RS10 {fmt_pct(row['ret_10d_pct'])} | "
+                f"vol {float(row['volume_ratio']):.2f}x | "
                 f"RSI {float(row['rsi14']):.1f}"
             )
 
@@ -81,6 +83,39 @@ def send_telegram(text: str, token: str, chat_id: str) -> None:
         response.read()
 
 
+def send_telegram_document(path: str, token: str, chat_id: str) -> None:
+    boundary = f"----stockscanner{uuid.uuid4().hex}"
+    filename = os.path.basename(path)
+    content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+
+    with open(path, "rb") as handle:
+        file_bytes = handle.read()
+
+    parts = [
+        (
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="chat_id"\r\n\r\n'
+            f"{chat_id}\r\n"
+        ).encode("utf-8"),
+        (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="document"; filename="{filename}"\r\n'
+            f"Content-Type: {content_type}\r\n\r\n"
+        ).encode("utf-8"),
+        file_bytes,
+        f"\r\n--{boundary}--\r\n".encode("utf-8"),
+    ]
+    body = b"".join(parts)
+    req = urllib.request.Request(
+        f"https://api.telegram.org/bot{token}/sendDocument",
+        data=body,
+        method="POST",
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+    )
+    with urllib.request.urlopen(req, timeout=60) as response:
+        response.read()
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate stock scan report.")
     parser.add_argument("--stock-csv", default="analyze_stocks_all.csv")
@@ -89,6 +124,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", default="summary.txt")
     parser.add_argument("--top", type=int, default=10)
     parser.add_argument("--telegram", action="store_true")
+    parser.add_argument("--telegram-csv", action="append", default=[], help="CSV file to send to Telegram as a document. Can be repeated.")
     return parser.parse_args()
 
 
@@ -105,6 +141,8 @@ def main() -> int:
         if not token or not chat_id:
             raise RuntimeError("Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID")
         send_telegram(report, token, chat_id)
+        for csv_path in args.telegram_csv:
+            send_telegram_document(csv_path, token, chat_id)
 
     return 0
 

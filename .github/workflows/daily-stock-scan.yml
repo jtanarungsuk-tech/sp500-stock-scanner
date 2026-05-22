@@ -41,7 +41,8 @@ jobs:
             --stock-csv analyze_stocks_all.csv \
             --passing-csv analyze_stocks_passing.csv \
             --sector-csv sector_rotation.csv \
-            --output summary.txt
+            --output summary.txt \
+            --top 30
 
       - name: Send Telegram summary
         env:
@@ -53,7 +54,10 @@ jobs:
             --passing-csv analyze_stocks_passing.csv \
             --sector-csv sector_rotation.csv \
             --output summary.txt \
-            --telegram
+            --top 30 \
+            --telegram \
+            --telegram-csv analyze_stocks_passing.csv \
+            --telegram-csv sector_rotation.csv
 
       - name: Upload results
         uses: actions/upload-artifact@v4
