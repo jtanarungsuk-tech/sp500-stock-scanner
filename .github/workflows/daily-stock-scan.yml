@@ -42,7 +42,7 @@ jobs:
             --passing-csv analyze_stocks_passing.csv \
             --sector-csv sector_rotation.csv \
             --output summary.txt \
-            --top 30
+            --top 10
 
       - name: Send Telegram summary
         env:
@@ -54,7 +54,7 @@ jobs:
             --passing-csv analyze_stocks_passing.csv \
             --sector-csv sector_rotation.csv \
             --output summary.txt \
-            --top 30 \
+            --top 10 \
             --telegram \
             --telegram-csv analyze_stocks_all.csv \
             --telegram-csv sector_rotation.csv
