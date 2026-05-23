@@ -2,8 +2,8 @@ name: Daily S&P 500 Stock Scan
 
 on:
   schedule:
-    # 19:25 Asia/Bangkok (UTC+7) = 12:25 UTC, Monday-Friday.
-    - cron: "25 12 * * 1-5"
+    # 07:35 Asia/Bangkok (UTC+7) = 00:35 UTC, every day.
+    - cron: "35 0 * * *"
   workflow_dispatch:
 
 jobs:
