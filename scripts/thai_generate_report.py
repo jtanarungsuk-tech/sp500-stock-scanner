@@ -47,12 +47,13 @@ def build_report(stock_csv: str, passing_csv: str, sector_csv: str, top: int) ->
 
     for idx, row in sectors.head(5).iterrows():
         lines.append(
-            f"{idx + 1}. {row['sector']} "
-            f"score {fmt_num(row['sector_rotation_score'])}, "
-            f"RS10 {fmt_pct(row['rs_10d_vs_benchmark_pct'])}, "
-            f"RS20 {fmt_pct(row['rs_20d_vs_benchmark_pct'])}, "
+            f"{idx + 1}. {row['sector']} | "
+            f"score {fmt_num(row['sector_rotation_score'])} | "
+            f"RS10 {fmt_pct(row['rs_10d_vs_benchmark_pct'])} | "
+            f"RS20 {fmt_pct(row['rs_20d_vs_benchmark_pct'])} | "
             f"ผ่าน {int(row['pass_count'])} ตัว"
         )
+        lines.append("")
 
     lines += ["", "หุ้นเด่น:"]
     if passing.empty:
@@ -66,6 +67,7 @@ def build_report(stock_csv: str, passing_csv: str, sector_csv: str, top: int) ->
                 f"vol {float(row['volume_ratio']):.2f}x | "
                 f"RSI {float(row['rsi14']):.1f}"
             )
+            lines.append("")
 
     lines += ["", "หมายเหตุ: เป็น watchlist จากข้อมูลราคา/วอลุ่ม ไม่ใช่คำแนะนำลงทุน"]
     return "\n".join(lines)
