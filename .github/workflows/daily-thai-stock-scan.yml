@@ -1,0 +1,70 @@
+name: Daily Thai Stock Scan
+
+on:
+  schedule:
+    # 18:35 Asia/Bangkok (UTC+7) = 11:35 UTC, every day.
+    - cron: "35 11 * * *"
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Thai stock screener
+        run: |
+          python scripts/thai_early_trend.py \
+            --csv thai_analyze_all.csv \
+            --passing-csv thai_analyze_passing.csv
+
+      - name: Run Thai sector rotation
+        run: |
+          python scripts/thai_sector_rotation.py \
+            --stock-csv thai_analyze_all.csv \
+            --csv thai_sector_rotation.csv
+
+      - name: Generate Thai summary
+        run: |
+          python scripts/thai_generate_report.py \
+            --stock-csv thai_analyze_all.csv \
+            --passing-csv thai_analyze_passing.csv \
+            --sector-csv thai_sector_rotation.csv \
+            --output thai_summary.txt \
+            --top 10
+
+      - name: Send Telegram summary
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python scripts/thai_generate_report.py \
+            --stock-csv thai_analyze_all.csv \
+            --passing-csv thai_analyze_passing.csv \
+            --sector-csv thai_sector_rotation.csv \
+            --output thai_summary.txt \
+            --top 10 \
+            --telegram \
+            --telegram-csv thai_analyze_all.csv \
+            --telegram-csv thai_sector_rotation.csv
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: thai-stock-scan-results
+          path: |
+            thai_analyze_all.csv
+            thai_analyze_passing.csv
+            thai_sector_rotation.csv
+            thai_summary.txt
