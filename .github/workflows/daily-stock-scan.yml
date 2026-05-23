@@ -4,9 +4,6 @@ on:
   schedule:
     # 07:35 Asia/Bangkok (UTC+7) = 00:35 UTC, every day.
     - cron: "35 0 * * *"
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
