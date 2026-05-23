@@ -2,18 +2,28 @@ name: Daily S&P 500 Stock Scan
 
 on:
   schedule:
-    # 07:00 Asia/Bangkok, Tuesday-Saturday. This is 00:00 UTC, Tuesday-Saturday.
-    - cron: "0 0 * * 2-6"
+    # Start at 06:45 Asia/Bangkok, then wait until 07:00 before scanning.
+    # This is 23:45 UTC, Monday-Friday.
+    - cron: "45 23 * * 1-5"
   workflow_dispatch:
 
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Wait until 07:00 Bangkok
+        if: ${{ github.event_name == 'schedule' }}
+        run: |
+          now=$(TZ=Asia/Bangkok date +%s)
+          target=$(TZ=Asia/Bangkok date -d "$(TZ=Asia/Bangkok date +%F) 07:00:00" +%s)
+          if [ "$now" -lt "$target" ]; then
+            sleep $((target - now))
+          fi
 
       - name: Set up Python
         uses: actions/setup-python@v5

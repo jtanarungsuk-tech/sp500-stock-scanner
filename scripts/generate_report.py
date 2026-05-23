@@ -9,6 +9,8 @@ import os
 import urllib.parse
 import urllib.request
 import uuid
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -33,8 +35,10 @@ def build_report(stock_csv: str, passing_csv: str, sector_csv: str, top: int) ->
     sectors = pd.read_csv(sector_csv)
 
     data_date = str(all_stocks["date"].dropna().iloc[0]) if not all_stocks.empty else "n/a"
+    run_time = datetime.now(ZoneInfo("Asia/Bangkok")).strftime("%Y-%m-%d %H:%M")
     lines = [
         f"S&P 500 วิเคราะห์หุ้น {data_date}",
+        f"เวลารันไทย: {run_time}",
         f"หุ้นผ่านสูตร: {len(passing)} / {len(all_stocks)}",
         "",
         "กลุ่มนำ:",
