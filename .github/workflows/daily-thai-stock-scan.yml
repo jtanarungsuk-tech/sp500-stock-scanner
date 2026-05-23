@@ -45,20 +45,23 @@ jobs:
             --top 10
 
       - name: Send Telegram summary
-        if: ${{ secrets.TELEGRAM_BOT_TOKEN != '' && secrets.TELEGRAM_CHAT_ID != '' }}
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          python scripts/thai_generate_report.py \
-            --stock-csv thai_analyze_all.csv \
-            --passing-csv thai_analyze_passing.csv \
-            --sector-csv thai_sector_rotation.csv \
-            --output thai_summary.txt \
-            --top 10 \
-            --telegram \
-            --telegram-csv thai_analyze_all.csv \
-            --telegram-csv thai_sector_rotation.csv
+          if [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && [ -n "${TELEGRAM_CHAT_ID:-}" ]; then
+            python scripts/thai_generate_report.py \
+              --stock-csv thai_analyze_all.csv \
+              --passing-csv thai_analyze_passing.csv \
+              --sector-csv thai_sector_rotation.csv \
+              --output thai_summary.txt \
+              --top 10 \
+              --telegram \
+              --telegram-csv thai_analyze_all.csv \
+              --telegram-csv thai_sector_rotation.csv
+          else
+            echo "TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID missing; skip Telegram send."
+          fi
 
       - name: Upload results
         uses: actions/upload-artifact@v4
