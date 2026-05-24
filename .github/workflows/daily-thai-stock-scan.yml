@@ -4,7 +4,13 @@ on:
   schedule:
     # 18:35 Asia/Bangkok (UTC+7) = 11:35 UTC, every day.
     - cron: "35 11 * * *"
+    # Heartbeat: run every 15 minutes, but the job will no-op unless within the send window.
+    - cron: "*/15 * * * *"
   workflow_dispatch:
+
+concurrency:
+  group: daily-thai-stock-scan
+  cancel-in-progress: false
 
 jobs:
   scan:
@@ -12,30 +18,50 @@ jobs:
     timeout-minutes: 40
 
     steps:
+      - name: Check send window (Asia/Bangkok)
+        id: window
+        shell: bash
+        run: |
+          now="$(TZ=Asia/Bangkok date +%H%M)"
+          # Send window: 18:30–18:40 Asia/Bangkok.
+          if [ "$now" -ge 1830 ] && [ "$now" -le 1840 ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "Within send window ($now)."
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "Outside send window ($now)."
+          fi
+
       - name: Checkout
+        if: steps.window.outputs.should_run == 'true'
         uses: actions/checkout@v4
 
       - name: Set up Python
+        if: steps.window.outputs.should_run == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install dependencies
+        if: steps.window.outputs.should_run == 'true'
         run: pip install -r requirements.txt
 
       - name: Run Thai stock screener
+        if: steps.window.outputs.should_run == 'true'
         run: |
           python scripts/thai_early_trend.py \
             --csv thai_analyze_all.csv \
             --passing-csv thai_analyze_passing.csv
 
       - name: Run Thai sector rotation
+        if: steps.window.outputs.should_run == 'true'
         run: |
           python scripts/thai_sector_rotation.py \
             --stock-csv thai_analyze_all.csv \
             --csv thai_sector_rotation.csv
 
       - name: Generate Thai summary
+        if: steps.window.outputs.should_run == 'true'
         run: |
           python scripts/thai_generate_report.py \
             --stock-csv thai_analyze_all.csv \
@@ -45,6 +71,7 @@ jobs:
             --top 10
 
       - name: Send Telegram summary
+        if: steps.window.outputs.should_run == 'true'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -64,6 +91,7 @@ jobs:
           fi
 
       - name: Upload results
+        if: steps.window.outputs.should_run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: thai-stock-scan-results

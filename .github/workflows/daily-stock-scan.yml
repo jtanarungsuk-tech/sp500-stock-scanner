@@ -4,7 +4,13 @@ on:
   schedule:
     # 07:35 Asia/Bangkok (UTC+7) = 00:35 UTC, every day.
     - cron: "35 0 * * *"
+    # Heartbeat: run every 15 minutes, but the job will no-op unless within the send window.
+    - cron: "*/15 * * * *"
   workflow_dispatch:
+
+concurrency:
+  group: daily-sp500-stock-scan
+  cancel-in-progress: false
 
 jobs:
   scan:
@@ -12,30 +18,50 @@ jobs:
     timeout-minutes: 40
 
     steps:
+      - name: Check send window (Asia/Bangkok)
+        id: window
+        shell: bash
+        run: |
+          now="$(TZ=Asia/Bangkok date +%H%M)"
+          # Send window: 07:30–07:40 Asia/Bangkok.
+          if [ "$now" -ge 0730 ] && [ "$now" -le 0740 ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "Within send window ($now)."
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "Outside send window ($now)."
+          fi
+
       - name: Checkout
+        if: steps.window.outputs.should_run == 'true'
         uses: actions/checkout@v4
 
       - name: Set up Python
+        if: steps.window.outputs.should_run == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install dependencies
+        if: steps.window.outputs.should_run == 'true'
         run: pip install -r requirements.txt
 
       - name: Run stock screener
+        if: steps.window.outputs.should_run == 'true'
         run: |
           python scripts/sp500_early_trend.py \
             --csv analyze_stocks_all.csv \
             --passing-csv analyze_stocks_passing.csv
 
       - name: Run sector rotation
+        if: steps.window.outputs.should_run == 'true'
         run: |
           python scripts/sector_rotation.py \
             --stock-csv analyze_stocks_all.csv \
             --csv sector_rotation.csv
 
       - name: Generate summary
+        if: steps.window.outputs.should_run == 'true'
         run: |
           python scripts/generate_report.py \
             --stock-csv analyze_stocks_all.csv \
@@ -45,6 +71,7 @@ jobs:
             --top 10
 
       - name: Send Telegram summary
+        if: steps.window.outputs.should_run == 'true'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -64,6 +91,7 @@ jobs:
           fi
 
       - name: Upload results
+        if: steps.window.outputs.should_run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: stock-scan-results
