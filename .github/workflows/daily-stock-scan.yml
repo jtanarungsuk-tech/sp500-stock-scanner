@@ -94,25 +94,32 @@ jobs:
             --output summary.txt \
             --top 10
 
+      - name: Validate Telegram secrets
+        if: steps.window.outputs.should_run == 'true'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
+            echo "Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID in repository secrets."
+            exit 1
+          fi
+
       - name: Send Telegram summary
         if: steps.window.outputs.should_run == 'true'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          if [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && [ -n "${TELEGRAM_CHAT_ID:-}" ]; then
-            python scripts/generate_report.py \
-              --stock-csv analyze_stocks_all.csv \
-              --passing-csv analyze_stocks_passing.csv \
-              --sector-csv sector_rotation.csv \
-              --output summary.txt \
-              --top 10 \
-              --telegram \
-              --telegram-csv analyze_stocks_all.csv \
-              --telegram-csv sector_rotation.csv
-          else
-            echo "TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID missing; skip Telegram send."
-          fi
+          python scripts/generate_report.py \
+            --stock-csv analyze_stocks_all.csv \
+            --passing-csv analyze_stocks_passing.csv \
+            --sector-csv sector_rotation.csv \
+            --output summary.txt \
+            --top 10 \
+            --telegram \
+            --telegram-csv analyze_stocks_all.csv \
+            --telegram-csv sector_rotation.csv
 
       - name: Upload results
         if: steps.window.outputs.should_run == 'true'
