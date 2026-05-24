@@ -9,8 +9,6 @@ on:
   schedule:
     # 07:35 Asia/Bangkok (UTC+7) = 00:35 UTC, every day.
     - cron: "35 0 * * *"
-    # Heartbeat: run every 15 minutes, but the job will no-op unless within the send window.
-    - cron: "*/15 * * * *"
   workflow_dispatch:
     inputs:
       mock_now_hhmm:
@@ -34,7 +32,7 @@ jobs:
         run: |
           event="${GITHUB_EVENT_NAME:-}"
           mock_now="${{ github.event.inputs.mock_now_hhmm }}"
-          if [ "$event" = "workflow_dispatch" ] || [ "$event" = "push" ]; then
+          if [ "$event" = "workflow_dispatch" ] || [ "$event" = "push" ] || [ "$event" = "schedule" ]; then
             if [ -n "$mock_now" ]; then
               if [[ "$mock_now" =~ ^[0-2][0-9][0-5][0-9]$ ]]; then
                 now="$mock_now"
@@ -45,21 +43,14 @@ jobs:
               fi
             else
               now="$(TZ=Asia/Bangkok date +%H%M)"
-              echo "Manual dispatch without mock time; now=$now"
+              echo "$event run; now=$now"
             fi
             echo "should_run=true" >> "$GITHUB_OUTPUT"
             echo "$event event: bypass time window."
             exit 0
           fi
-          now="$(TZ=Asia/Bangkok date +%H%M)"
-          # Send window: 07:30–08:00 Asia/Bangkok (tolerate cron delays).
-          if [ "$now" -ge 0730 ] && [ "$now" -le 0800 ]; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-            echo "Within send window ($now)."
-          else
-            echo "should_run=false" >> "$GITHUB_OUTPUT"
-            echo "Outside send window ($now)."
-          fi
+          echo "should_run=false" >> "$GITHUB_OUTPUT"
+          echo "Unsupported event: $event"
 
       - name: Checkout
         if: steps.window.outputs.should_run == 'true'
