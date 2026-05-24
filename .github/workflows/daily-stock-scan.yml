@@ -34,7 +34,7 @@ jobs:
         run: |
           event="${GITHUB_EVENT_NAME:-}"
           mock_now="${{ github.event.inputs.mock_now_hhmm }}"
-          if [ "$event" = "workflow_dispatch" ]; then
+          if [ "$event" = "workflow_dispatch" ] || [ "$event" = "push" ]; then
             if [ -n "$mock_now" ]; then
               if [[ "$mock_now" =~ ^[0-2][0-9][0-5][0-9]$ ]]; then
                 now="$mock_now"
@@ -48,7 +48,7 @@ jobs:
               echo "Manual dispatch without mock time; now=$now"
             fi
             echo "should_run=true" >> "$GITHUB_OUTPUT"
-            echo "Manual dispatch: bypass time window."
+            echo "$event event: bypass time window."
             exit 0
           fi
           now="$(TZ=Asia/Bangkok date +%H%M)"
