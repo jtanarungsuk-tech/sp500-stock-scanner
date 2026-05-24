@@ -22,9 +22,15 @@ jobs:
         id: window
         shell: bash
         run: |
+          event="${GITHUB_EVENT_NAME:-}"
+          if [ "$event" = "workflow_dispatch" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "Manual dispatch: bypass time window."
+            exit 0
+          fi
           now="$(TZ=Asia/Bangkok date +%H%M)"
-          # Send window: 07:30–07:40 Asia/Bangkok.
-          if [ "$now" -ge 0730 ] && [ "$now" -le 0740 ]; then
+          # Send window: 07:30–08:00 Asia/Bangkok (tolerate cron delays).
+          if [ "$now" -ge 0730 ] && [ "$now" -le 0800 ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
             echo "Within send window ($now)."
           else
