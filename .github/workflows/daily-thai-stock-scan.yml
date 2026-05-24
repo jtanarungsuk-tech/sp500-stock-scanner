@@ -1,4 +1,5 @@
 name: Daily Thai Stock Scan
+# E2E trigger marker: 2026-05-24
 
 on:
   push:
