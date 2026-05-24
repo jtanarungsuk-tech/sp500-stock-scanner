@@ -1,6 +1,11 @@
 name: Daily Thai Stock Scan
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/daily-thai-stock-scan.yml"
   schedule:
     # 18:35 Asia/Bangkok (UTC+7) = 11:35 UTC, every day.
     - cron: "35 11 * * *"

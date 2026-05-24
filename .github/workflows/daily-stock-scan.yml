@@ -1,6 +1,11 @@
 name: Daily S&P 500 Stock Scan
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/daily-stock-scan.yml"
   schedule:
     # 07:35 Asia/Bangkok (UTC+7) = 00:35 UTC, every day.
     - cron: "35 0 * * *"
