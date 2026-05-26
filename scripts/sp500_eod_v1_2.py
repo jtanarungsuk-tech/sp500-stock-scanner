@@ -37,6 +37,19 @@ SP500_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
 DEFAULT_PERIOD = "1y"
 DEFAULT_TOP = 10
 USER_AGENT = {"User-Agent": "Mozilla/5.0"}
+SECTOR_TO_ETF = {
+    "Information Technology": "XLK",
+    "Financials": "XLF",
+    "Energy": "XLE",
+    "Health Care": "XLV",
+    "Consumer Discretionary": "XLY",
+    "Consumer Staples": "XLP",
+    "Industrials": "XLI",
+    "Communication Services": "XLC",
+    "Utilities": "XLU",
+    "Real Estate": "XLRE",
+    "Materials": "XLB",
+}
 
 
 @dataclass
@@ -494,63 +507,28 @@ def generate_thai_summary(
         f"S&P 500 วิเคราะห์หุ้น {latest_date}",
         f"เวลารันไทย: {now_th}",
         f"หุ้นผ่านสูตร: {passed_count} / {total_count}",
-        f"Market Regime: {market_regime}",
         "",
         "กลุ่มนำ:",
     ]
 
     for i, row in sector_df.head(5).reset_index(drop=True).iterrows():
+        etf = SECTOR_TO_ETF.get(row["sector"], "N/A")
         lines.append(
-            f"{i+1}. {row['sector']} | score {row['sector_score']:.1f} | flow {row['sector_flow_label']} | "
-            f"RS10 {row['avg_RS10']:.2f}% | RS20 {row['avg_RS20']:.2f}% | close {row['avg_close_position']:.2f} | "
-            f"vol {row['avg_volume_ratio']:.2f}x | ผ่าน {int(row['passed_count'])} ตัว"
+            f"{i+1}. {row['sector']} ({etf}) | score {row['sector_score']:.1f} | "
+            f"RS10 {row['avg_RS10']:+.2f}% | RS20 {row['avg_RS20']:+.2f}% | ผ่าน {int(row['passed_count'])} ตัว"
         )
+        lines.append("")
 
     lines += ["", "หุ้นเด่น:"]
     top = all_df.sort_values(["final_watchlist_score", "score"], ascending=False).head(top_n).reset_index(drop=True)
     for i, row in top.iterrows():
-        lines += [
-            f"{i+1}. {row['ticker']} | {row['sector']}",
-            f"final {row['final_watchlist_score']:.1f} | score {row['score']:.1f}",
-            f"flow {row['money_flow_label']}",
-            f"RS10 {row['RS10']:.2f}% | vol {row['volume_ratio']:.2f}x",
-            f"close {row['close_position']:.2f} | persist {int(row['strong_days_10d'])}/10",
-            f"breakout {row['breakout_quality']}",
-            "",
-        ]
-
-    lines += [
-        "คำแปล:",
-        "- final = คะแนนรวมสุดท้ายของ watchlist ยิ่งสูงยิ่งน่าสนใจ",
-        "- score = คะแนนจากสูตรหลัก",
-        "- flow = คุณภาพเงินไหลเข้า/ออก",
-        "- RS10 = ความแข็งแกร่งเทียบตลาดใน 10 วัน",
-        "- vol = วอลุ่มเทียบค่าเฉลี่ย 20 วัน",
-        "- close = คุณภาพการปิด ยิ่งใกล้ 1 ยิ่งปิดใกล้จุดสูงสุดของวัน",
-        "- persist = จำนวนวันที่หุ้นแข็งใน 10 วันล่าสุด",
-        "- breakout = คุณภาพการทะลุแนวต้าน A ดีสุด",
-        "",
-        "แบ่งกลุ่มวันถัดไป:",
-    ]
-
-    group_map = {
-        "continuation_candidate": "Continuation",
-        "pullback_watch": "Pullback Watch",
-        "avoid_chasing": "Avoid Chasing",
-        "distribution_risk": "Distribution Risk",
-    }
-    for key, label in group_map.items():
-        tickers = watch_df[watch_df["next_day_group"] == key]["ticker"].head(20).tolist()
-        lines.append(f"{label}:")
-        lines.append(f"- {', '.join(tickers) if tickers else '-'}")
+        lines.append(
+            f"{i+1}. {row['ticker']} | {row['sector']} | score {int(round(row['score']))} | "
+            f"RS10 {row['RS10']:+.2f}% | vol {row['volume_ratio']:.2f}x | RSI {row['RSI']:.1f}"
+        )
         lines.append("")
 
     lines += [
-        "สรุปตลาด:",
-        f"- {_market_regime_thai(market_regime)}",
-        f"- กลุ่มนำหลักวันนี้: {', '.join(sector_df['sector'].head(3).tolist())}",
-        f"- ความเสี่ยงที่ควรระวัง: หุ้นที่ขึ้นเร็วแต่วอลุ่มไม่ยืนยัน และกลุ่ม distribution_risk",
-        f"- โฟกัส watchlist: continuation_candidate และ pullback_watch ในกลุ่มนำ",
         "",
         "หมายเหตุ:",
         "เป็น watchlist จากข้อมูลราคา/วอลุ่ม ไม่ใช่คำแนะนำลงทุน",
