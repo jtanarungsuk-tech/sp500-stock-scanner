@@ -17,6 +17,7 @@ from datetime import datetime
 from io import StringIO
 from pathlib import Path
 from typing import Any
+import urllib.request
 
 import numpy as np
 import pandas as pd
@@ -35,6 +36,7 @@ REGIME_SYMBOLS = ["SPY", "QQQ", "IWM", "VIX"]
 SP500_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
 DEFAULT_PERIOD = "1y"
 DEFAULT_TOP = 10
+USER_AGENT = {"User-Agent": "Mozilla/5.0"}
 
 
 @dataclass
@@ -54,10 +56,14 @@ def parse_args() -> argparse.Namespace:
 
 
 def _to_yf_symbol(symbol: str) -> str:
+    if symbol == "VIX":
+        return "^VIX"
     return symbol.replace(".", "-")
 
 
 def _from_yf_symbol(symbol: str) -> str:
+    if symbol == "^VIX":
+        return "VIX"
     return symbol.replace("-", ".")
 
 
@@ -83,8 +89,10 @@ def _percentile_rank(series: pd.Series) -> pd.Series:
 
 
 def _load_sp500_universe() -> pd.DataFrame:
-    table = pd.read_html(StringIO(pd.read_html(SP500_URL)[0].to_html()))[0]
-    # Re-read via html to keep behavior stable across parser engines.
+    req = urllib.request.Request(SP500_URL, headers=USER_AGENT)
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        html = resp.read().decode("utf-8", "ignore")
+    table = pd.read_html(StringIO(html))[0]
     return table[["Symbol", "GICS Sector"]].rename(columns={"Symbol": "ticker", "GICS Sector": "sector"})
 
 
@@ -289,8 +297,14 @@ def classify_market_regime(benchmark_daily: pd.DataFrame) -> str:
 
 
 def calculate_sector_scores(latest_df: pd.DataFrame) -> pd.DataFrame:
+    base = latest_df.copy()
+    if "suspicious_rally_flag" not in base.columns:
+        base["suspicious_rally_flag"] = False
+    if "distribution_flag" not in base.columns:
+        base["distribution_flag"] = False
+
     sec = (
-        latest_df.groupby("sector", as_index=False)
+        base.groupby("sector", as_index=False)
         .agg(
             sector_score=("score", "mean"),
             avg_RS10=("RS10", "mean"),
