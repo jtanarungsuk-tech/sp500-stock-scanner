@@ -13,6 +13,42 @@ python3 scripts/sector_rotation.py --stock-csv analyze_stocks_all.csv --csv sect
 python3 scripts/generate_report.py --stock-csv analyze_stocks_all.csv --passing-csv analyze_stocks_passing.csv --sector-csv sector_rotation.csv --output summary.txt
 ```
 
+## EOD Scanner v1.2
+
+สคริปต์ใหม่สำหรับวิเคราะห์หลังตลาดปิด (Thai summary + 3 CSV + txt/md report):
+
+```bash
+python3 scripts/sp500_eod_v1_2.py --mode auto_download --output-dir .
+```
+
+หรือใช้ไฟล์ราคาที่เตรียมเอง:
+
+```bash
+python3 scripts/sp500_eod_v1_2.py --mode csv_input --input-csv your_prices.csv --output-dir .
+```
+
+## สคริปต์แยกสำหรับหุ้นไทย
+
+สคริปต์นี้เป็นคนละไฟล์กับ S&P 500 โดยตรง:
+
+```bash
+python3 scripts/thai_early_trend.py --csv thai_analyze_all.csv --passing-csv thai_analyze_passing.csv
+```
+
+ค่า default ใช้ universe `set50` และ benchmark `^SET.BK`
+
+ถ้าต้องการ universe เอง (เช่น SET100/หุ้นทั้งหมด) ให้เตรียม CSV แล้วระบุ:
+
+```bash
+python3 scripts/thai_early_trend.py \
+  --universe csv \
+  --universe-csv scripts/thai_universe_template.csv \
+  --csv thai_analyze_all.csv \
+  --passing-csv thai_analyze_passing.csv
+```
+
+`universe csv` ต้องมีคอลัมน์ `symbol` และสามารถเพิ่ม `name`, `sector` ได้
+
 ## GitHub Actions
 
 Workflow อยู่ที่ `.github/workflows/daily-stock-scan.yml`
