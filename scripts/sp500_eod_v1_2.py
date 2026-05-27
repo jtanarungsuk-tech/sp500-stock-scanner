@@ -514,7 +514,7 @@ def generate_thai_summary(
     for i, row in sector_df.head(5).reset_index(drop=True).iterrows():
         etf = SECTOR_TO_ETF.get(row["sector"], "N/A")
         lines.append(
-            f"{i+1}. {row['sector']} ({etf}) | score {row['sector_score']:.1f} | "
+            f"{i+1}. {row['sector']} ({etf}) | score {row['sector_score']:.2f} | "
             f"RS10 {row['avg_RS10']:+.2f}% | RS20 {row['avg_RS20']:+.2f}% | ผ่าน {int(row['passed_count'])} ตัว"
         )
         lines.append("")
@@ -523,8 +523,8 @@ def generate_thai_summary(
     top = all_df.sort_values(["final_watchlist_score", "score"], ascending=False).head(top_n).reset_index(drop=True)
     for i, row in top.iterrows():
         lines.append(
-            f"{i+1}. {row['ticker']} | {row['sector']} | score {int(round(row['score']))} | "
-            f"RS10 {row['RS10']:+.2f}% | vol {row['volume_ratio']:.2f}x | RSI {row['RSI']:.1f}"
+            f"{i+1}. {row['ticker']} | {row['sector']} | score {row['score']:.2f} | "
+            f"RS10 {row['RS10']:+.2f}% | vol {row['volume_ratio']:.2f}x | RSI {row['RSI']:.2f}"
         )
         lines.append("")
 
@@ -544,9 +544,18 @@ def export_outputs(
     summary: str,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
-    all_df.to_csv(output_dir / "analyze_stocks_all.csv", index=False)
-    sector_df.to_csv(output_dir / "sector_rotation.csv", index=False)
-    watch_df.to_csv(output_dir / "next_day_watchlist.csv", index=False)
+    all_out = all_df.copy()
+    sector_out = sector_df.copy()
+    watch_out = watch_df.copy()
+
+    for df_out in [all_out, sector_out, watch_out]:
+        num_cols = df_out.select_dtypes(include=["float", "float64", "float32"]).columns
+        if len(num_cols) > 0:
+            df_out[num_cols] = df_out[num_cols].round(2)
+
+    all_out.to_csv(output_dir / "analyze_stocks_all.csv", index=False)
+    sector_out.to_csv(output_dir / "sector_rotation.csv", index=False)
+    watch_out.to_csv(output_dir / "next_day_watchlist.csv", index=False)
     (output_dir / "summary_report.txt").write_text(summary, encoding="utf-8")
     (output_dir / "summary_report.md").write_text(summary, encoding="utf-8")
 

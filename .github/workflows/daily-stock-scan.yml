@@ -6,13 +6,19 @@ on:
       - main
     paths:
       - ".github/workflows/daily-stock-scan.yml"
+
   schedule:
-    # 07:35 Asia/Bangkok (UTC+7) = 00:35 UTC, every day.
+    # 20:35 America/New_York every day.
+    # DST-safe schedules (UTC):
+    # - EDT (UTC-4) -> 00:35 UTC
+    # - EST (UTC-5) -> 01:35 UTC
     - cron: "35 0 * * *"
+    - cron: "35 1 * * *"
+
   workflow_dispatch:
     inputs:
       mock_now_hhmm:
-        description: "Optional test time in Asia/Bangkok HHMM (e.g. 1410)"
+        description: "Optional test time in Asia/Bangkok HHMM (e.g. 0815)"
         required: false
         default: ""
 
@@ -26,31 +32,44 @@ jobs:
     timeout-minutes: 40
 
     steps:
-      - name: Check send window (Asia/Bangkok)
+      - name: Check run context and show time
         id: window
         shell: bash
         run: |
           event="${GITHUB_EVENT_NAME:-}"
           mock_now="${{ github.event.inputs.mock_now_hhmm }}"
-          if [ "$event" = "workflow_dispatch" ] || [ "$event" = "push" ] || [ "$event" = "schedule" ]; then
+          target_ny="2035"
+
+          echo "Event: $event"
+          echo "UTC now: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo "Bangkok now: $(TZ=Asia/Bangkok date '+%Y-%m-%d %H:%M:%S Asia/Bangkok')"
+          echo "New York now: $(TZ=America/New_York date '+%Y-%m-%d %H:%M:%S America/New_York')"
+
+          if [ "$event" = "workflow_dispatch" ] || [ "$event" = "push" ]; then
             if [ -n "$mock_now" ]; then
               if [[ "$mock_now" =~ ^[0-2][0-9][0-5][0-9]$ ]]; then
-                now="$mock_now"
-                echo "Manual dispatch test mode using mock_now_hhmm=$now"
+                echo "Manual dispatch test mode using mock_now_hhmm=$mock_now"
               else
-                echo "Invalid mock_now_hhmm: '$mock_now' (expected HHMM, e.g. 1410)"
+                echo "Invalid mock_now_hhmm: '$mock_now' (expected HHMM, e.g. 2035)"
                 exit 1
               fi
-            else
-              now="$(TZ=Asia/Bangkok date +%H%M)"
-              echo "$event run; now=$now"
             fi
             echo "should_run=true" >> "$GITHUB_OUTPUT"
-            echo "$event event: bypass time window."
             exit 0
           fi
+
+          if [ "$event" = "schedule" ]; then
+            now_ny="$(TZ=America/New_York date +%H%M)"
+            if [ "$now_ny" = "$target_ny" ]; then
+              echo "should_run=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "should_run=false" >> "$GITHUB_OUTPUT"
+              echo "Skip schedule run at NY $now_ny, target $target_ny"
+            fi
+            exit 0
+          fi
+
           echo "should_run=false" >> "$GITHUB_OUTPUT"
-          echo "Unsupported event: $event"
 
       - name: Checkout
         if: steps.window.outputs.should_run == 'true'

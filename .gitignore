@@ -1,5 +1,7 @@
 __pycache__/
 .DS_Store
+.env
+*.env
 
 # Generated daily outputs. GitHub Actions uploads these as artifacts.
 analyze_stocks_all.csv

@@ -7,18 +7,23 @@ import argparse
 import concurrent.futures as futures
 import csv
 import json
+import re
 import time
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from io import BytesIO
 from io import StringIO
 
 import pandas as pd
+from pypdf import PdfReader
 
 
 USER_AGENT = {"User-Agent": "Mozilla/5.0"}
 YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range={range}&interval=1d&includePrePost=false&events=history"
 SET50_WIKI_URL = "https://en.wikipedia.org/wiki/SET50_Index"
+SET100_WIKI_URL = "https://en.wikipedia.org/wiki/SET100_Index"
+SET_CONSTITUENTS_PAGE_URL = "https://www.set.or.th/th/market/information/securities-list/constituents-list-set50-set100"
 DEFAULT_BENCHMARK = "^SET.BK"
 
 
@@ -35,6 +40,12 @@ def fetch_url(url: str, timeout: int = 25) -> str:
         return response.read().decode("utf-8", "ignore")
 
 
+def fetch_bytes(url: str, timeout: int = 25) -> bytes:
+    req = urllib.request.Request(url, headers=USER_AGENT)
+    with urllib.request.urlopen(req, timeout=timeout) as response:
+        return response.read()
+
+
 def yahoo_symbol(symbol: str) -> str:
     raw = symbol.strip().upper()
     if raw.startswith("^"):
@@ -44,8 +55,8 @@ def yahoo_symbol(symbol: str) -> str:
     return f"{raw.replace('.', '-')}.BK"
 
 
-def load_set50_universe() -> list[UniverseMember]:
-    html = fetch_url(SET50_WIKI_URL)
+def load_wiki_universe(url: str) -> list[UniverseMember]:
+    html = fetch_url(url)
     table = pd.read_html(StringIO(html))[0]
     columns = ["Symbol", "Securities Name", "Sector"]
     missing = [col for col in columns if col not in table.columns]
@@ -64,8 +75,119 @@ def load_set50_universe() -> list[UniverseMember]:
             )
         )
     if not members:
-        raise RuntimeError("SET50 universe is empty")
+        raise RuntimeError("Universe from source is empty")
     return members
+
+
+def load_set50_universe() -> list[UniverseMember]:
+    return load_wiki_universe(SET50_WIKI_URL)
+
+
+def load_set100_universe() -> list[UniverseMember]:
+    try:
+        return load_set100_universe_from_set_page()
+    except Exception:
+        return load_wiki_universe(SET100_WIKI_URL)
+
+
+def load_set100_universe_from_set_page() -> list[UniverseMember]:
+    html = fetch_url(SET_CONSTITUENTS_PAGE_URL)
+    pdf_urls = sorted(
+        set(
+            re.findall(
+                r"https://media\.set\.or\.th/set/Documents/[^\"]*SET50[^\"]*100[^\"]*\.pdf",
+                html,
+            )
+        )
+    )
+    if not pdf_urls:
+        raise RuntimeError("No SET50/SET100 constituent PDF link found on SET page")
+    latest_pdf_url = pdf_urls[-1]
+    pdf_bytes = fetch_bytes(latest_pdf_url, timeout=35)
+
+    sectors = [
+        "Information & Communication Technology",
+        "Transportation & Logistics",
+        "Property Development",
+        "Energy & Utilities",
+        "Health Care Services",
+        "Finance & Securities",
+        "Electronic Components",
+        "Tourism & Leisure",
+        "Construction Materials",
+        "Petrochemicals & Chemicals",
+        "Personal Products & Pharmaceuticals",
+        "Professional Services",
+        "Construction Services",
+        "Food & Beverage",
+        "Media & Publishing",
+        "Fashion",
+        "Agribusiness",
+        "Banking",
+        "Insurance",
+        "Commerce",
+        "Packaging",
+    ]
+    sectors = sorted(sectors, key=len, reverse=True)
+
+    reader = PdfReader(BytesIO(pdf_bytes))
+    candidates: list[tuple[int, str, str, str]] = []
+    for page in reader.pages:
+        text = page.extract_text() or ""
+        for raw_line in text.splitlines():
+            line = " ".join(raw_line.strip().split())
+            if not line:
+                continue
+            m = re.match(r"^(\d{1,3})\s+([A-Z0-9\.-]{1,12})\s+(.+)$", line)
+            if not m:
+                continue
+            idx = int(m.group(1))
+            symbol = m.group(2).strip()
+            rest = m.group(3).strip()
+            if idx < 1 or idx > 120:
+                continue
+            if symbol in {"SET", "SET50", "SET100"}:
+                continue
+            for sector in sectors:
+                if rest.endswith(sector):
+                    name = rest[: -len(sector)].strip()
+                    if name:
+                        candidates.append((idx, symbol, name, sector))
+                    break
+
+    if not candidates:
+        raise RuntimeError("Could not parse SET100 constituents from SET PDF")
+
+    # Choose the longest continuous run 1..N in encounter order.
+    best: list[tuple[int, str, str, str]] = []
+    current: list[tuple[int, str, str, str]] = []
+    expected = 1
+    for row in candidates:
+        idx = row[0]
+        if idx == 1:
+            if len(current) > len(best):
+                best = current
+            current = [row]
+            expected = 2
+            continue
+        if current and idx == expected:
+            current.append(row)
+            expected += 1
+        elif current:
+            if len(current) > len(best):
+                best = current
+            current = []
+            expected = 1
+    if len(current) > len(best):
+        best = current
+
+    if len(best) < 80:
+        raise RuntimeError(f"Parsed SET100 block is too short: {len(best)}")
+
+    return [
+        UniverseMember(symbol=symbol, name=name, sector=sector)
+        for _, symbol, name, sector in best
+    ]
 
 
 def load_universe_csv(path: str) -> list[UniverseMember]:
@@ -223,6 +345,58 @@ def screen_stock(
     }
     setup_score = round(sum(100 / len(checks) for passed in checks.values() if passed), 1)
 
+    # Build 10-day persistence from daily conditions.
+    ret_5d_series = close.pct_change(5)
+    ret_10d_series = close.pct_change(10)
+    ret_20d_series = close.pct_change(20)
+    prev_ret_20d_series = close.shift(20) / close.shift(40) - 1
+
+    bmk_ret_5d_series = benchmark_close.pct_change(5).reindex(close.index)
+    bmk_ret_10d_series = benchmark_close.pct_change(10).reindex(close.index)
+    bmk_ret_20d_series = benchmark_close.pct_change(20).reindex(close.index)
+    bmk_prev_ret_20d_series = benchmark_close.shift(20) / benchmark_close.shift(40) - 1
+    bmk_prev_ret_20d_series = bmk_prev_ret_20d_series.reindex(close.index)
+
+    excess_20d_series = ret_20d_series - bmk_ret_20d_series
+    prev_excess_20d_series = prev_ret_20d_series - bmk_prev_ret_20d_series
+    rs20_improving_series = excess_20d_series > prev_excess_20d_series
+    trend_ok_series = (ema50 > ema200) | (ema50 > ema50.shift(10))
+    rs_ok_series = (ret_10d_series > bmk_ret_10d_series) | (
+        (ret_5d_series > bmk_ret_5d_series) & rs20_improving_series
+    )
+    high20_prev_series = high.shift(1).rolling(20).max()
+    volume_avg20_series = volume.rolling(20).mean()
+    turnover_avg20_m_series = ((close * volume).rolling(20).mean()) / 1_000_000
+
+    checks_daily = pd.DataFrame(
+        {
+            "price_gt_ema50": close > ema50,
+            "price_gt_ema200": close > ema200,
+            "ema50_gt_ema200_or_slope10d_up": trend_ok_series,
+            "close_gt_ema20": close > ema20,
+            "rsi14_45_to_70": (rsi14 >= 45) & (rsi14 <= 70),
+            "price_lte_ema20_x_1_08": close <= ema20 * 1.08,
+            "rs10_gt_benchmark_or_rs5_gt_benchmark_and_rs20_improving": rs_ok_series,
+            "close_gte_95pct_20d_high": close >= high20_prev_series * 0.95,
+            "volume_gte_0_8x_avg20": volume >= 0.8 * volume_avg20_series,
+            "atr10_pct_lte_atr50_pct_x_1_10": (atr10 / close) <= ((atr50 / close) * 1.10),
+            "turnover_avg20_gte_min_million": turnover_avg20_m_series >= min_turnover_million,
+            "price_gte_min_price": close >= min_price,
+        }
+    ).fillna(False)
+    setup_score_daily = checks_daily.sum(axis=1) * (100.0 / len(checks))
+    rs10_daily_pct = (ret_10d_series - bmk_ret_10d_series) * 100
+    persistence_mask = (rs10_daily_pct > 0) & (setup_score_daily >= 80)
+    persistence_window = persistence_mask.tail(10)
+    strong_days_10d = int(persistence_window.sum()) if len(persistence_window) == 10 else None
+
+    latest_high = float(high.iloc[-1])
+    latest_low = float(low.iloc[-1])
+    if latest_high == latest_low:
+        close_position = 0.5
+    else:
+        close_position = max(0.0, min(1.0, (latest - latest_low) / (latest_high - latest_low)))
+
     return {
         "symbol": member.symbol,
         "name": member.name,
@@ -231,6 +405,10 @@ def screen_stock(
         "pass": all(checks.values()),
         "setup_score": setup_score,
         "close": round(latest, 2),
+        "high": round(latest_high, 2),
+        "low": round(latest_low, 2),
+        "close_position": round(close_position, 2),
+        "strong_days_10d": strong_days_10d if strong_days_10d is not None else "",
         "ema20": round(ema20.iloc[-1], 2),
         "ema50": round(ema50.iloc[-1], 2),
         "ema200": round(ema200.iloc[-1], 2),
@@ -272,9 +450,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--universe",
-        choices=["set50", "csv"],
-        default="set50",
-        help="Universe source: SET50 from public page or CSV file.",
+        choices=["set50", "set100", "csv"],
+        default="set100",
+        help="Universe source: SET50/SET100 from public page or CSV file.",
     )
     parser.add_argument("--universe-csv", default="", help="CSV path for --universe csv (needs `symbol`; optional `name`, `sector`).")
     parser.add_argument("--benchmark", default=DEFAULT_BENCHMARK, help="Benchmark symbol for RS comparison. Default: ^SET.BK")
@@ -286,6 +464,8 @@ def parse_args() -> argparse.Namespace:
 def load_universe(args: argparse.Namespace) -> list[UniverseMember]:
     if args.universe == "set50":
         return load_set50_universe()
+    if args.universe == "set100":
+        return load_set100_universe()
     if not args.universe_csv:
         raise RuntimeError("--universe-csv is required when --universe csv")
     return load_universe_csv(args.universe_csv)
@@ -321,6 +501,10 @@ def main() -> int:
         "pass",
         "setup_score",
         "close",
+        "high",
+        "low",
+        "close_position",
+        "strong_days_10d",
         "ema20",
         "ema50",
         "ema200",

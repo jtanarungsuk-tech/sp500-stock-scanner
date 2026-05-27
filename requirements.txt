@@ -4,3 +4,4 @@ yfinance
 pypdf
 lxml
 html5lib
+python-dotenv

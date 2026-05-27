@@ -80,13 +80,26 @@ Telegram จะส่งสรุปหุ้นเด่น 30 ตัว แล
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_CHAT_ID`
 
+สำหรับรัน local ให้สร้างไฟล์ `.env` (ห้าม commit):
+
+```bash
+cp .env.example .env
+```
+
+แล้วใส่ค่า:
+
+```env
+TELEGRAM_BOT_TOKEN=NEW_TOKEN
+TELEGRAM_CHAT_ID=CHAT_ID
+```
+
 หา `TELEGRAM_CHAT_ID` ได้โดยส่งข้อความหา bot ก่อน แล้วรัน:
 
 ```bash
 python3 scripts/telegram_chat_id.py --token "YOUR_BOT_TOKEN"
 ```
 
-ถ้าไม่ได้ตั้ง secrets สองตัวนี้ workflow จะยังรันและเก็บ CSV เป็น artifact แต่จะไม่ส่ง Telegram
+ถ้าไม่ได้ตั้ง secrets สองตัวนี้ workflow จะ `fail` ที่ขั้น validate เพื่อกันการรันแบบไม่ส่ง Telegram โดยไม่รู้ตัว
 
 ## เกณฑ์คัดหุ้นต้นเทรนด์
 

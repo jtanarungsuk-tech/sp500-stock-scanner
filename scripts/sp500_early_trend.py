@@ -176,6 +176,55 @@ def screen_stock(
     }
     setup_score = round(sum(10 for passed in checks.values() if passed))
 
+    # Build 10-day persistence from daily conditions.
+    ret_5d_series = close.pct_change(5)
+    ret_10d_series = close.pct_change(10)
+    ret_20d_series = close.pct_change(20)
+    prev_ret_20d_series = close.shift(20) / close.shift(40) - 1
+
+    spy_ret_5d_series = spy_close.pct_change(5).reindex(close.index)
+    spy_ret_10d_series = spy_close.pct_change(10).reindex(close.index)
+    spy_ret_20d_series = spy_close.pct_change(20).reindex(close.index)
+    spy_prev_ret_20d_series = spy_close.shift(20) / spy_close.shift(40) - 1
+    spy_prev_ret_20d_series = spy_prev_ret_20d_series.reindex(close.index)
+
+    excess_20d_series = ret_20d_series - spy_ret_20d_series
+    prev_excess_20d_series = prev_ret_20d_series - spy_prev_ret_20d_series
+    rs20_improving_series = excess_20d_series > prev_excess_20d_series
+    trend_ok_series = (ema50 > ema200) | (ema50 > ema50.shift(10))
+    rs_ok_series = (ret_10d_series > spy_ret_10d_series) | (
+        (ret_5d_series > spy_ret_5d_series) & rs20_improving_series
+    )
+    high20_prev_series = high.shift(1).rolling(20).max()
+    volume_avg20_series = volume.rolling(20).mean()
+
+    checks_daily = pd.DataFrame(
+        {
+            "price_gt_ema50": close > ema50,
+            "price_gt_ema200": close > ema200,
+            "ema50_gt_ema200_or_slope10d_up": trend_ok_series,
+            "close_gt_ema20": close > ema20,
+            "rsi14_45_to_70": (rsi14 >= 45) & (rsi14 <= 70),
+            "price_lte_ema20_x_1_08": close <= ema20 * 1.08,
+            "rs10_gt_spy_or_rs5_gt_spy_and_rs20_improving": rs_ok_series,
+            "close_gte_95pct_20d_high": close >= high20_prev_series * 0.95,
+            "volume_gte_0_8x_avg20": volume >= 0.8 * volume_avg20_series,
+            "atr10_pct_lte_atr50_pct_x_1_10": (atr10 / close) <= ((atr50 / close) * 1.10),
+        }
+    ).fillna(False)
+    setup_score_daily = checks_daily.sum(axis=1) * 10
+    rs10_daily_pct = (ret_10d_series - spy_ret_10d_series) * 100
+    persistence_mask = (rs10_daily_pct > 0) & (setup_score_daily >= 80)
+    persistence_window = persistence_mask.tail(10)
+    strong_days_10d = int(persistence_window.sum()) if len(persistence_window) == 10 else None
+
+    latest_high = float(high.iloc[-1])
+    latest_low = float(low.iloc[-1])
+    if latest_high == latest_low:
+        close_position = 0.5
+    else:
+        close_position = max(0.0, min(1.0, (latest - latest_low) / (latest_high - latest_low)))
+
     return {
         "symbol": member.symbol,
         "name": member.name,
@@ -184,6 +233,10 @@ def screen_stock(
         "pass": all(checks.values()),
         "setup_score": setup_score,
         "close": round(latest, 2),
+        "high": round(latest_high, 2),
+        "low": round(latest_low, 2),
+        "close_position": round(close_position, 2),
+        "strong_days_10d": strong_days_10d if strong_days_10d is not None else "",
         "ema20": round(ema20.iloc[-1], 2),
         "ema50": round(ema50.iloc[-1], 2),
         "ema200": round(ema200.iloc[-1], 2),
@@ -248,6 +301,10 @@ def main() -> int:
         "pass",
         "setup_score",
         "close",
+        "high",
+        "low",
+        "close_position",
+        "strong_days_10d",
         "ema20",
         "ema50",
         "ema200",
